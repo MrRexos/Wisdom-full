@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "Wisdom",
+    "slug": "Wisdom_expo",
+    "scheme": "Wisdom_expo",
+    "version": "1.0.3",
+    "orientation": "portrait",
+    "icon": "./assets/WisdomIcon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "",
+      "resizeMode": "contain",
+      "backgroundColor": "#111111"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.rexos.Wisdom",
+      "buildNumber": "4",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "We need access to your photo library so you can set a profile picture or display them in your services.",
+        "NSCameraUsageDescription": "We need access to your camera so you can set a profile picture or display them in your services.",
+        "NSPhotoLibraryAddUsageDescription": "We need permission to save images from your profile to your gallery.",
+        "NSLocationWhenInUseUsageDescription": "We need access to your current location in order to show you services near you.",
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.232292898356-o6jj43dnn8uqg139udlvtptcaj8551rp"
+            ]
+          }
+        ]
+      },
+      "newArchEnabled": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.rexos.Wisdom_expo",
+      "versionCode": 1,
+      "newArchEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "d34848bf-7bb0-442f-a1d7-5ddf9b8e7392"
+      }
+    },
+    "plugins": [
+      "expo-font"
+    ]
+  }
+}
