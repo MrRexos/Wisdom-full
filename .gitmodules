@@ -1,6 +1,0 @@
-[submodule "frontend"]
-	path = frontend
-	url = https://github.com/MrRexos/Wisdom-repo.git
-[submodule "backend"]
-	path = backend
-	url = https://github.com/MrRexos/Wisdom-backend-repo.git
