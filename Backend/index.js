@@ -1,31 +1,68 @@
+require('dotenv').config();
+
 const bodyParser = require('body-parser');
 const express = require('express');
 const mysql = require('mysql2');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const { Storage } = require('@google-cloud/storage');
 const multer = require('multer');
 const path = require('path');
 const sharp = require('sharp');
+const nodemailer = require('nodemailer');
 
 const Stripe = require('stripe');
 const stripe = new Stripe('tu_clave_secreta');
 
-require('dotenv').config();
-
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Middleware para parsear JSON.
+// Middleware para parsear JSON. 
 app.use(bodyParser.json());
 app.use(express.json());
 const upload = multer({ storage: multer.memoryStorage() });
 
+// Configuración de transporte para enviar correos.
+const transporter = nodemailer.createTransport({
+  host: process.env.EMAIL_HOST,
+  port: process.env.EMAIL_PORT,
+  secure: false,
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
+// Comprobar la configuración del transporte al iniciar la aplicación
+transporter.verify().catch(err => {
+  console.error('Nodemailer configuration error:', err);
+});
+
+// Middleware para verificar tokens JWT
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Token requerido' });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Token inválido' });
+    }
+    req.user = user;
+    next();
+  });
+}
+
 // Configuración del pool de conexiones a la base de datos a // JSON.parse(process.env.GOOGLE_CREDENTIALS)..
-const pool = mysql.createPool({ 
-  host: '34.175.131.147', //process.env.HOST
-  user: process.env.USER,
-  password: process.env.PASSWORD,
-  database: process.env.DATABASE,
+const pool = mysql.createPool({
+  host: process.env.DB_HOST, //process.env.HOST process.env.USER process.env.PASSWORD process.env.DATABASE
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_DATABASE,
+  port: process.env.DB_PORT,
   //socketPath: `/cloudsql/${process.env.INSTANCE_CONNECTION_NAME}`,
   waitForConnections: true,
   connectionLimit: 20,  // Número máximo de conexiones en el pool
@@ -88,7 +125,7 @@ app.post('/api/signup', async (req, res) => {
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    const query = 'INSERT INTO user_account (email, username, password, first_name, surname, joined_datetime, language, allow_notis, profile_picture) VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?)';
+    const query = 'INSERT INTO user_account (email, username, password, first_name, surname, joined_datetime, language, allow_notis, profile_picture, is_verified) VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?, 0)';
     const values = [email, username, hashedPassword, first_name, surname, language, allow_notis, profile_picture];
 
     pool.getConnection((err, connection) => {
@@ -113,7 +150,7 @@ app.post('/api/signup', async (req, res) => {
         const serviceListQuery = 'INSERT INTO service_list (list_name, user_id) VALUES (?, ?)';
         const serviceListValues = ['Recently seen', userId];
 
-        connection.query(serviceListQuery, serviceListValues, (err) => {
+        connection.query(serviceListQuery, serviceListValues, async (err) => {
           connection.release(); // Libera la conexión después de la segunda consulta
 
           if (err) {
@@ -121,8 +158,160 @@ app.post('/api/signup', async (req, res) => {
             res.status(500).send('Error al crear la lista de servicios.');
             return;
           }
+          const token = jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
-          res.status(201).json({ message: 'Usuario y lista de servicios creados.', userId });
+          // Enviar correo de verificación
+          try {
+            const verifyToken = jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: '1d' });
+            const url = `${process.env.BASE_URL}/api/verify-email?token=${verifyToken}`;
+            await transporter.sendMail({
+              from: '"Wisdom" <wisdom.helpcontact@gmail.com>', // process.env.EMAIL_USER,
+              to: email,
+              subject: 'Confirm your Wisdom',
+              attachments: [
+                {
+                  filename: 'wisdom.png',
+                  path: path.join(__dirname, 'assets', 'wisdom.png'),
+                  cid: 'wisdomLogo'
+                },
+                {
+                  filename: 'instagram.png',
+                  path: path.join(__dirname, 'assets', 'instagram.png'),
+                  cid: 'instagramLogo'
+                },
+                {
+                  filename: 'twitter.png',
+                  path: path.join(__dirname, 'assets', 'twitter.png'),
+                  cid: 'twitterLogo'
+                }
+              ],
+              html:`
+              <table
+                width="100%"
+                cellpadding="0"
+                cellspacing="0"
+                style="background:#ffffff;font-family:Inter,sans-serif;color:#111827;"
+              >
+                <tr>
+                  <td align="center" style="padding:48px 24px;">
+                    <!-- LOGO -->
+                    <div style="font-size:24px;font-weight:600;letter-spacing:.6px;margin-bottom:32px;">
+                      WISDOM<sup style="font-size:12px;vertical-align:top;">®</sup>
+                    </div>
+
+                    <!-- TÍTULO -->
+                    <h1 style="font-size:30px;font-weight:500;margin-bottom:16px;">
+                      Welcome to Wisdom
+                    </h1>
+
+                    <!-- TEXTO -->
+                    <p style="font-size:16px;line-height:1.55;max-width:420px;margin:0 auto 50px;">
+                      You've successfully sign up on Wisdom. Please confirm your email.
+                    </p>
+
+                    <!-- BOTÓN (enlace) -->
+                    <a
+                      href="${url}"
+                      style="
+                        display:inline-block;
+                        padding:22px 100px;
+                        background:#f3f3f3;
+                        border-radius:14px;
+                        text-decoration:none;
+                        font-size:14px;
+                        font-weight:600;
+                        color:#111827;
+                      "
+                    >
+                      Verify email
+                    </a>
+
+                    <!-- LÍNEA DIVISORIA -->
+                    <hr
+                      style="
+                        border:none;
+                        height:1px;
+                        background-color:#f3f4f6;
+                        margin:70px 0;
+                        width:100%;
+                      "
+                    />
+
+                    <!-- SOCIAL ICONS -->
+                    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 24px;">
+                      <tr>
+                        <td style="padding:0 5px;">
+                          <a href="https://wisdom-web.vercel.app/" aria-label="Wisdom web"
+                            style="
+                              display: flex;
+                              width: 32px;
+                              height: 32px;
+                              background: #f3f4f6;
+                              border-radius: 50%;
+                              text-decoration: none;
+                              justify-content: center;
+                              align-items: center;
+                            ">
+                            
+                            <img src="cid:wisdomLogo"
+                              alt="Wisdom"
+                              style="display:block; margin:auto; max-width:18px; max-height:18px; object-fit:contain;" />
+
+                          </a>
+                        </td>
+                        <td style="padding:0 5px;">
+                          <a href="https://www.instagram.com/wisdom__app/" aria-label="Instagram"
+                            style="
+                              display: flex;
+                              width: 32px;
+                              height: 32px;
+                              background: #f3f4f6;
+                              border-radius: 50%;
+                              text-decoration: none;
+                              justify-content: center;
+                              align-items: center;
+                            ">
+                            <img src="cid:instagramLogo" alt="Instagram" width="18" height="18" style="display:block;margin:auto;" />
+                          </a>
+                        </td>
+                        <td style="padding:0 0px;">
+                          <a href="https://x.com/wisdom_entity" aria-label="Twitter"
+                            style="
+                              display: flex;
+                              width: 32px;
+                              height: 32px;
+                              background: #f3f4f6;
+                              border-radius: 50%;
+                              text-decoration: none;
+                              justify-content: center;
+                              align-items: center;
+                            ">
+                            <img src="cid:twitterLogo" alt="Twitter" width="18" height="18" style="display:block;margin:auto;" />
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- PIE DE PÁGINA -->
+                    <div style="font-size:12px;color:#6b7280;line-height:1.4;text-decoration:none;">
+                      <a href="#" style="color:#6b7280;text-decoration:none;">Privacy Policy</a>
+                      &nbsp;·&nbsp;
+                      <a href="#" style="color:#6b7280;text-decoration:none;">Terms of Service</a>
+                      <br /><br />
+                      Mataró, BCN, 08304
+                      <br /><br />
+                      This email was sent to ${email}
+                    </div>
+                  </td>
+                </tr>
+              </table>
+              `
+            });
+          } catch (mailErr) {
+            console.error('Error al enviar el correo de verificación:', mailErr);
+          }
+
+          res.status(201).json({ message: 'Usuario y lista de servicios creados.', userId, token });
         });
       });
     });
@@ -184,6 +373,34 @@ app.get('/api/check-username', (req, res) => {
   });
 });
 
+// Ruta para verificar el correo electrónico
+app.get('/api/verify-email', (req, res) => {
+  const { token } = req.query;
+  if (!token) {
+    return res.status(400).send('Token requerido');
+  }
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+    if (err) {
+      return res.status(400).send('Token inválido');
+    }
+    const userId = decoded.id;
+    pool.getConnection((connErr, connection) => {
+      if (connErr) {
+        console.error('Error al obtener la conexión:', connErr);
+        return res.status(500).send('Error de conexión');
+      }
+      connection.query('UPDATE user_account SET is_verified = 1 WHERE id = ?', [userId], (updErr) => {
+        connection.release();
+        if (updErr) {
+          console.error('Error al verificar el usuario:', updErr);
+          return res.status(500).send('Error al verificar el usuario');
+        }
+        res.send('Cuenta verificada con éxito');
+      });
+    });
+  });
+});
+
 // Ruta para hacer login
 app.post('/api/login', (req, res) => {
   const { usernameOrEmail, password } = req.body;
@@ -210,7 +427,8 @@ app.post('/api/login', (req, res) => {
           const match = await bcrypt.compare(password, user.password);
           if (match) {
             delete user.password;
-            res.json({ success: true, message: 'Inicio de sesión exitoso.', user });
+            const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+            res.json({ success: true, message: 'Inicio de sesión exitoso.', user, token });
           } else {
             res.json({ success: false, message: 'Password incorrect.' });
           }
@@ -224,6 +442,9 @@ app.post('/api/login', (req, res) => {
     });
   });
 });
+
+// Proteger las rutas siguientes con JWT
+app.use(authenticateToken);
 
 // Nueva ruta para subir imágenes a Google Cloud Storage
 app.post('/api/upload-image', multerMid.single('file'), async (req, res, next) => {
@@ -1660,6 +1881,52 @@ app.put('/api/user/:id/email', (req, res) => {
       } else {
         res.status(404).json({ notFound: true, message: 'No se encontró el usuario.' });
       }
+    });
+  });
+});
+
+// Cambiar contraseña
+app.put('/api/user/:id/password', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { currentPassword, newPassword } = req.body;
+
+  if (parseInt(id, 10) !== req.user.id) {
+    return res.status(403).json({ error: 'Acceso denegado' });
+  }
+
+  pool.getConnection(async (err, connection) => {
+    if (err) {
+      console.error('Error al obtener la conexión:', err);
+      return res.status(500).json({ error: 'Error al obtener la conexión.' });
+    }
+
+    connection.query('SELECT password FROM user_account WHERE id = ?', [id], async (err, results) => {
+      if (err) {
+        connection.release();
+        console.error('Error al obtener la contraseña:', err);
+        return res.status(500).json({ error: 'Error al obtener la contraseña.' });
+      }
+
+      if (results.length === 0) {
+        connection.release();
+        return res.status(404).json({ error: 'Usuario no encontrado.' });
+      }
+
+      const match = await bcrypt.compare(currentPassword, results[0].password);
+      if (!match) {
+        connection.release();
+        return res.status(400).json({ error: 'Contraseña actual incorrecta.' });
+      }
+
+      const hashed = await bcrypt.hash(newPassword, 10);
+      connection.query('UPDATE user_account SET password = ? WHERE id = ?', [hashed, id], (err) => {
+        connection.release();
+        if (err) {
+          console.error('Error al actualizar la contraseña:', err);
+          return res.status(500).json({ error: 'Error al actualizar la contraseña.' });
+        }
+        res.json({ message: 'Contraseña actualizada con éxito.' });
+      });
     });
   });
 });
