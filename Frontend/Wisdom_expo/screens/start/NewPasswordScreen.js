@@ -9,14 +9,17 @@ import EyeIcon from 'react-native-bootstrap-icons/icons/eye';
 import EyeSlashIcon from 'react-native-bootstrap-icons/icons/eye-slash';
 import WisdomLogo from '../../assets/wisdomLogo.tsx'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import api from '../../utils/api';
+import { storeDataLocally } from '../../utils/asyncStorage';
 
 
 
 
-export default function LogInScreen() {
+export default function NewPasswordScreen({ route }) {
   const { colorScheme } = useColorScheme();
   const { t, i18n } = useTranslation();
   const navigation = useNavigation();
+  const token = route?.params?.token;
   const [confirmPassword, setConfirmPassword] = useState('');
   const [password, setPassword] = useState('');
   const [isSecurePassword, setIsSecurePassword] = useState(true);
@@ -42,8 +45,26 @@ export default function LogInScreen() {
     setPassword (newPassword);
     setShowError(false);
   }
-  const nextPressed = () =>{
-    navigation.navigate('HomeScreen');
+  const nextPressed = async () => {
+    if (!token || password !== confirmPassword || password.length < 1) {
+      setShowError(true);
+      setErrorMessage(t('passwords_do_not_match'));
+      return;
+    }
+
+    try {
+      const response = await api.post('/api/reset-password', { token, newPassword: password });
+      if (response.data && response.data.token) {
+        let user = response.data.user;
+        user.userToken = true;
+        await storeDataLocally('user', JSON.stringify(user));
+        navigation.navigate('HomeScreen');
+      }
+    } catch (error) {
+      console.error('Reset password error:', error);
+      setShowError(true);
+      setErrorMessage(t('reset_token_error'));
+    }
   }
 
   useEffect(() => {
@@ -131,8 +152,11 @@ export default function LogInScreen() {
               <EyeIcon size={20} color={placeHolderTextColorChange} style={{ marginLeft: 10, transform: [{ scale: 1.15 }] }} />
             )}
           </TouchableOpacity>
-          
+
         </View>
+        {showError ? (
+          <Text className="text-[#ff633e] text-[13px] pt-3">{errorMessage}</Text>
+        ) : null}
 
       </View>
         <View className="justify-center items-center pb-5 pt-10">
