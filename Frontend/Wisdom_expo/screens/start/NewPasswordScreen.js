@@ -9,14 +9,18 @@ import EyeIcon from 'react-native-bootstrap-icons/icons/eye';
 import EyeSlashIcon from 'react-native-bootstrap-icons/icons/eye-slash';
 import WisdomLogo from '../../assets/wisdomLogo.tsx'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import api from '../../utils/api';
+import { storeDataLocally } from '../../utils/asyncStorage';
 
 
 
 
-export default function LogInScreen() {
+export default function NewPasswordScreen({ route }) {
   const { colorScheme } = useColorScheme();
   const { t, i18n } = useTranslation();
   const navigation = useNavigation();
+  const emailOrUsername = route?.params?.emailOrUsername;
+  const [code, setCode] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [password, setPassword] = useState('');
   const [isSecurePassword, setIsSecurePassword] = useState(true);
@@ -31,19 +35,55 @@ export default function LogInScreen() {
 
 
   
+  const inputCodeChanged = (event) => {
+    setCode(event.nativeEvent.text);
+    setShowError(false);
+  };
 
   const inputConfirmPasswordChanged = (event) => {
     const newConfirmPassword = event.nativeEvent.text;
     setConfirmPassword (newConfirmPassword);
     setShowError(false);
   }
+  
   const inputNewPasswordChanged = (event) => {
     const newPassword = event.nativeEvent.text;
     setPassword (newPassword);
     setShowError(false);
   }
-  const nextPressed = () =>{
-    navigation.navigate('HomeScreen');
+
+  const nextPressed = async () => {
+    if (!emailOrUsername || !code) {
+      setShowError(true);
+      setErrorMessage(t('passwords_do_not_match'));
+      return;
+    }
+
+    if (password.length < 8) {
+      setShowError(true);
+      setErrorMessage(t('password_at_least_eight'));
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setShowError(true);
+      setErrorMessage(t('passwords_do_not_match'));
+      return;
+    }
+
+    try {
+      const response = await api.post('/api/reset-password', { emailOrUsername, code, newPassword: password });
+      if (response.data && response.data.token) {
+        let user = response.data.user;
+        user.token = response.data.token;
+        await storeDataLocally('user', JSON.stringify(user));
+        navigation.navigate('HomeScreen');
+      }
+    } catch (error) {
+      console.error('Reset password error:', error);
+      setShowError(true);
+      setErrorMessage(t('reset_token_error'));
+    }
   }
 
   useEffect(() => {
@@ -84,13 +124,29 @@ export default function LogInScreen() {
             {t('set_a_new_password')}
         </Text>
         <Text className="font-inter-semibold text-[15px] pt-10 text-[#444343] dark:text-[#f2f2f2]">
+          {t('code')}
+        </Text>
+
+        <View className="mt-3 px-5 h-[55] flex-row justify-start items-center rounded-full bg-[#E0E0E0]/60 dark:bg-[#3D3D3D]/60 border-[1px] border-[#706F6E]/20 dark:border-[#B6B5B5]/20">
+            <TextInput
+            placeholder={t('code')}
+            autoFocus={true}
+            selectionColor={cursorColorChange}
+            placeholderTextColor={placeHolderTextColorChange}
+            onChange={inputCodeChanged}
+            value={code}
+            keyboardAppearance={colorScheme === 'dark' ? 'dark' : 'light'}
+            className=" h-[55] flex-1 text-[15px] text-[#444343] dark:text-[#f2f2f2]"/>
+        </View>
+
+        <Text className="font-inter-semibold text-[15px] pt-6 text-[#444343] dark:text-[#f2f2f2]">
           {t('new_password')}
         </Text>
         
         <View className="mt-3 px-5 h-[55] flex-row justify-between items-center rounded-full bg-[#E0E0E0]/60 dark:bg-[#3D3D3D]/60 border-[1px] border-[#706F6E]/20 dark:border-[#B6B5B5]/20">
             <TextInput 
             placeholder={t('new_password')}
-            autoFocus={true} 
+            autoFocus={false} 
             secureTextEntry={isSecurePassword}
             selectionColor={cursorColorChange} 
             placeholderTextColor={placeHolderTextColorChange} 
@@ -114,7 +170,7 @@ export default function LogInScreen() {
         <View className="mt-3 px-5 h-[55] flex-row justify-between items-center rounded-full bg-[#E0E0E0]/60 dark:bg-[#3D3D3D]/60 border-[1px] border-[#706F6E]/20 dark:border-[#B6B5B5]/20">
           <TextInput
             placeholder={t('type_it_again')}
-            autoFocus={true}
+            autoFocus={false}
             selectionColor={cursorColorChange}
             placeholderTextColor={placeHolderTextColorChange}
             secureTextEntry={isSecureConfirmation} // Controla la visibilidad del texto
@@ -133,6 +189,9 @@ export default function LogInScreen() {
           </TouchableOpacity>
           
         </View>
+        {showError ? (
+          <Text className="text-[#ff633e] text-[13px] pt-3">{errorMessage}</Text>
+        ) : null}
 
       </View>
         <View className="justify-center items-center pb-5 pt-10">

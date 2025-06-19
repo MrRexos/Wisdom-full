@@ -1,4 +1,5 @@
 import { NavigationContainer, useFocusEffect } from '@react-navigation/native';
+import * as Linking from 'expo-linking';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text, Image } from 'react-native'
@@ -81,6 +82,7 @@ import TodayProScreen from '../screens/professional/TodayProScreen';
 import CalendarScreen from '../screens/services/CalendarScreen';
 import DirectionsScreen from '../screens/settings/DirectionsScreen';
 import EditAccountScreen from '../screens/settings/EditAccountScreen';
+import ChangePasswordScreen from '../screens/settings/ChangePasswordScreen';
 import HelpScreen from '../screens/settings/HelpScreen';
 import TurnExpertScreen from '../screens/settings/TurnExpertScreen';
 import WalletScreen from '../screens/settings/WalletScreen';
@@ -93,10 +95,28 @@ import EditProfileScreen from '../screens/settings/EditProfileScreen';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
+const linking = {
+  prefixes: [
+    Linking.createURL('/'),
+    'Wisdom_expo://',
+    'https://wisdom-app-34b3fb420f18.herokuapp.com'
+  ],
+  config: {
+    screens: {
+      NewPassword: {
+        path: 'reset-password/:token?',
+        parse: {
+          token: (token) => token,
+        },
+      },
+    },
+  },
+};
+
 
 export default function Navigation() {
   return (
-    <NavigationContainer>
+    <NavigationContainer  linking={linking}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="WelcomeVideo" component={WelcomeVideoScreen} options={{ gestureEnabled: false }} />
         <Stack.Screen name="Loading" component={LoadingScreen} options={{ animation: 'none', gestureEnabled: false }} />
@@ -158,6 +178,7 @@ export default function Navigation() {
         <Stack.Screen name="Calendar" component={CalendarScreen} />
         <Stack.Screen name="Directions" component={DirectionsScreen} />
         <Stack.Screen name="EditAccount" component={EditAccountScreen} />
+        <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
         <Stack.Screen name="Help" component={HelpScreen} />
         <Stack.Screen name="TurnExpert" component={TurnExpertScreen} />
         <Stack.Screen name="Wallet" component={WalletScreen} />
@@ -462,6 +483,7 @@ function SettingsStackNavigator() {
       <Stack.Screen name="Preferences" component={PreferencesScreen} />
       <Stack.Screen name="Language" component={LanguageScreen} />
       <Stack.Screen name="EditAccount" component={EditAccountScreen} />
+      <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
       <Stack.Screen name="Help" component={HelpScreen} />
       <Stack.Screen name="Wallet" component={WalletScreen} />
       <Stack.Screen name="FAQ" component={FAQScreen} />

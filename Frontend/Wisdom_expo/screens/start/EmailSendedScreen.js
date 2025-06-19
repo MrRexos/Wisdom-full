@@ -10,13 +10,21 @@ import {ChevronLeftIcon} from 'react-native-heroicons/outline';
 import WisdomLogo from '../../assets/wisdomLogo.tsx'
 
 
-export default function EmailSendedScreen() {
+export default function EmailSendedScreen({ route }) {
     const {colorScheme, toggleColorScheme} = useColorScheme();
     const { t, i18n } = useTranslation();
     const navigation = useNavigation();
     const iconColor = colorScheme === 'dark' ? '#f2f2f2': '#444343';
+    const emailOrUsername = route?.params?.emailOrUsername;
 
-    const openMailApp = () => {
+    const launchMailApp = () => {
+      const mailtoUrl = 'mailto:';
+      Linking.openURL(mailtoUrl).catch((err) => {
+        console.error('Failed to open mail app:', err);
+      });
+    };
+
+    const contactSupport = () => {
         const mailtoUrl = 'mailto:wisdom.helpcontact@gmail.com';
         Linking.openURL(mailtoUrl).catch((err) => {
           console.error('Failed to open mail app:', err);
@@ -51,16 +59,21 @@ export default function EmailSendedScreen() {
             
           </View>
           <View>
+            <TouchableOpacity onPress={() => navigation.navigate('NewPassword', { emailOrUsername })}>
+              <Text className="font-inter-medium text-center text-[15px] pb-4 text-[#444343] dark:text-[#f2f2f2] ">
+                {t('change_password_arrow')}
+              </Text>
+            </TouchableOpacity>
             <View className="justify-center items-center ">
-                <TouchableOpacity 
-                onPress={() => navigation.navigate('NewPassword')}
+                <TouchableOpacity
+                onPress={() => { launchMailApp(); navigation.navigate('NewPassword', { emailOrUsername }); }}
                 className="bg-[#323131] dark:bg-[#fcfcfc] w-[320] h-[55] rounded-full items-center justify-center" >
                     <Text className="font-inter-semibold text-[15px] text-[#fcfcfc] dark:text-[#323131] ">{t('open_mail')}</Text>
                 </TouchableOpacity>
-            </View>     
+            </View>
             <Text className="font-inter-medium text-center text-[12px] pt-4 pb-6 text-[#444343] dark:text-[#f2f2f2]">
               <Text>{t('need_help')} </Text>
-              <Text onPress={openMailApp} className="text-[#444343] dark:text-[#f2f2f2] opacity-60 text-center underline">{t('contact_support')}</Text>
+              <Text onPress={contactSupport} className="text-[#444343] dark:text-[#f2f2f2] opacity-60 text-center underline">{t('contact_support')}</Text>
             </Text>
           </View>
       </SafeAreaView>

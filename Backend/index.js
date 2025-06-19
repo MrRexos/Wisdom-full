@@ -20,7 +20,13 @@ const port = process.env.PORT || 3000;
 // Middleware para parsear JSON. 
 app.use(bodyParser.json());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
 const upload = multer({ storage: multer.memoryStorage() });
+
+// CIDs for email images
+const wisdomLogoCid = 'wisdom_logo';
+const instagramLogoCid = 'instagram_logo';
+const twitterLogoCid = 'twitter_logo';
 
 // Configuración de transporte para enviar correos.
 const transporter = nodemailer.createTransport({
@@ -169,21 +175,9 @@ app.post('/api/signup', async (req, res) => {
               to: email,
               subject: 'Confirm your Wisdom',
               attachments: [
-                {
-                  filename: 'wisdom.png',
-                  path: path.join(__dirname, 'assets', 'wisdom.png'),
-                  cid: 'wisdomLogo'
-                },
-                {
-                  filename: 'instagram.png',
-                  path: path.join(__dirname, 'assets', 'instagram.png'),
-                  cid: 'instagramLogo'
-                },
-                {
-                  filename: 'twitter.png',
-                  path: path.join(__dirname, 'assets', 'twitter.png'),
-                  cid: 'twitterLogo'
-                }
+                { filename: 'wisdom.png', path: path.join(__dirname, 'assets', 'wisdom.png'), cid: wisdomLogoCid },
+                { filename: 'instagram.png', path: path.join(__dirname, 'assets', 'instagram.png'), cid: instagramLogoCid },
+                { filename: 'twitter.png', path: path.join(__dirname, 'assets', 'twitter.png'), cid: twitterLogoCid }
               ],
               html:`
               <table
@@ -253,7 +247,7 @@ app.post('/api/signup', async (req, res) => {
                               align-items: center;
                             ">
                             
-                            <img src="cid:wisdomLogo"
+                            <img src="cid:${wisdomLogoCid}" width="18" height="18"
                               alt="Wisdom"
                               style="display:block; margin:auto; max-width:18px; max-height:18px; object-fit:contain;" />
 
@@ -271,7 +265,7 @@ app.post('/api/signup', async (req, res) => {
                               justify-content: center;
                               align-items: center;
                             ">
-                            <img src="cid:instagramLogo" alt="Instagram" width="18" height="18" style="display:block;margin:auto;" />
+                            <img src="cid:${instagramLogoCid}" alt="Instagram" width="18" height="18" style="display:block;margin:auto;" />
                           </a>
                         </td>
                         <td style="padding:0 0px;">
@@ -286,7 +280,7 @@ app.post('/api/signup', async (req, res) => {
                               justify-content: center;
                               align-items: center;
                             ">
-                            <img src="cid:twitterLogo" alt="Twitter" width="18" height="18" style="display:block;margin:auto;" />
+                            <img src="cid:${twitterLogoCid}" alt="Twitter" width="18" height="18" style="display:block;margin:auto;" />
                           </a>
                         </td>
                       </tr>
@@ -395,7 +389,7 @@ app.get('/api/verify-email', (req, res) => {
           console.error('Error al verificar el usuario:', updErr);
           return res.status(500).send('Error al verificar el usuario');
         }
-        res.send('Cuenta verificada con éxito');
+        res.sendFile(path.join(__dirname, 'public', 'verify-success.html'));
       });
     });
   });
@@ -442,6 +436,199 @@ app.post('/api/login', (req, res) => {
     });
   });
 });
+
+// Enviar enlace para restablecer contraseña
+app.post('/api/forgot-password', (req, res) => {
+
+  const { emailOrUsername } = req.body;
+  if (!emailOrUsername) {
+    return res.status(400).json({ error: 'Email or username required' });
+  }
+
+  pool.getConnection((err, connection) => {
+    if (err) {
+      console.error('Error al obtener la conexión:', err);
+      return res.status(500).json({ error: 'Error al obtener la conexión.' });
+    }
+
+    const query = 'SELECT id, email FROM user_account WHERE email = ? OR username = ?';
+    connection.query(query, [emailOrUsername, emailOrUsername], async (err, results) => {
+      if (err) {
+        connection.release();
+        console.error('Error al buscar el usuario:', err);
+        return res.status(500).json({ error: 'Error al buscar el usuario.' });
+      }
+
+      if (results.length === 0) {
+        connection.release();
+        return res.status(200).json({ notFound: true });
+      }
+
+      const { id, email } = results[0];
+      const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+      connection.query(
+        'REPLACE INTO password_reset_codes (user_id, code, expires_at) VALUES (?, ?, ?)',
+        [id, resetCode, expiresAt],
+        async (codeErr) => {
+          connection.release();
+          if (codeErr) {
+            console.error('Error al guardar el código de restablecimiento:', codeErr);
+            return res.status(500).json({ error: 'Error al generar el código.' });
+          }
+
+          try {
+            await transporter.sendMail({
+              from: '"Wisdom" <wisdom.helpcontact@gmail.com>',
+              to: email,
+              subject: 'Reset your password for Wisdom',
+              attachments: [
+                { filename: 'wisdom.png', path: path.join(__dirname, 'assets', 'wisdom.png'), cid: wisdomLogoCid },
+                { filename: 'instagram.png', path: path.join(__dirname, 'assets', 'instagram.png'), cid: instagramLogoCid },
+                { filename: 'twitter.png', path: path.join(__dirname, 'assets', 'twitter.png'), cid: twitterLogoCid }
+              ],
+              html: `
+                <table width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;font-family:Inter,sans-serif;color:#111827;">
+                  <tr>
+                    <td align="center" style="padding:48px 24px;">
+                      <div style="font-size:24px;font-weight:600;letter-spacing:.6px;margin-bottom:32px;">
+                        WISDOM<sup style="font-size:12px;vertical-align:top;">®</sup>
+                      </div>
+                      <p style="font-size:16px;line-height:1.55;max-width:420px;margin:0 auto 50px;">
+                        It looks like you lost your password. Use the code below to reset it.
+                      </p>
+                      <div style="font-size:30px;font-weight:600;margin-bottom:32px;">${resetCode}</div>
+                      <hr style="border:none;height:1px;background-color:#f3f4f6;margin:70px 0;width:100%;" />
+                      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 24px;">
+                        <tr>
+                          <td style="padding:0 5px;">
+                            <a href="https://wisdom-web.vercel.app/" aria-label="Wisdom web" style="display:flex;width:32px;height:32px;background:#f3f4f6;border-radius:50%;text-decoration:none;justify-content:center;align-items:center;">
+                              <img src="cid:${wisdomLogoCid}" width="18" height="18" alt="Wisdom" style="display:block;margin:auto;max-width:18px;max-height:18px;object-fit:contain;" />
+                            </a>
+                          </td>
+                          <td style="padding:0 5px;">
+                            <a href="https://www.instagram.com/wisdom__app/" aria-label="Instagram" style="display:flex;width:32px;height:32px;background:#f3f4f6;border-radius:50%;text-decoration:none;justify-content:center;align-items:center;">
+                              <img src="cid:${instagramLogoCid}" alt="Instagram" width="18" height="18" style="display:block;margin:auto;" />
+                            </a>
+                          </td>
+                          <td style="padding:0 0px;">
+                            <a href="https://x.com/wisdom_entity" aria-label="Twitter" style="display:flex;width:32px;height:32px;background:#f3f4f6;border-radius:50%;text-decoration:none;justify-content:center;align-items:center;">
+                              <img src="cid:${twitterLogoCid}" alt="Twitter" width="18" height="18" style="display:block;margin:auto;" />
+                            </a>
+                          </td>
+                        </tr>
+                      </table>
+                      <div style="font-size:12px;color:#6b7280;line-height:1.4;text-decoration:none;">
+                        <a href="#" style="color:#6b7280;text-decoration:none;">Privacy Policy</a>
+                        &nbsp;·&nbsp;
+                        <a href="#" style="color:#6b7280;text-decoration:none;">Terms of Service</a>
+                        <br /><br />
+                        Mataró, BCN, 08304
+                        <br /><br />
+                        This email was sent to ${email}
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+                `
+            });
+          } catch (mailErr) {
+            console.error('Error al enviar el correo de restablecimiento:', mailErr);
+          }
+
+          res.json({ message: 'Reset code sent' });
+        }
+      );
+    }); 
+  });
+});
+
+// Restablecer contraseña con token
+app.post('/api/reset-password', async (req, res) => {
+  const { emailOrUsername, code, newPassword } = req.body;
+  if (!emailOrUsername || !code || !newPassword) {
+    return res.status(400).json({ error: 'Code, user and new password required' });
+  }
+
+  pool.getConnection((err, connection) => {
+    if (err) {
+      console.error('Error al obtener la conexión:', err);
+      return res.status(500).json({ error: 'Error al obtener la conexión.' });
+    }
+
+    const queryUser = 'SELECT id FROM user_account WHERE email = ? OR username = ?';
+    connection.query(queryUser, [emailOrUsername, emailOrUsername], async (userErr, userRes) => {
+      if (userErr) {
+        connection.release();
+        console.error('Error al buscar el usuario:', userErr);
+        return res.status(500).json({ error: 'Error al buscar el usuario.' });
+      }
+
+      if (userRes.length === 0) {
+        connection.release();
+        return res.status(400).json({ error: 'User not found' });
+      }
+
+      const userId = userRes[0].id;
+      connection.query('SELECT code, expires_at FROM password_reset_codes WHERE user_id = ?', [userId], async (codeErr, codeRes) => {
+        if (codeErr) {
+          connection.release();
+          console.error('Error al obtener el código:', codeErr);
+          return res.status(500).json({ error: 'Error al verificar el código.' });
+        }
+
+        if (codeRes.length === 0) {
+          connection.release();
+          return res.status(400).json({ error: 'Invalid code' });
+        }
+
+        const record = codeRes[0];
+        if (record.code !== code || new Date(record.expires_at) < new Date()) {
+          connection.release();
+          return res.status(400).json({ error: 'Invalid or expired code' });
+        }
+
+        try {
+          const hashed = await bcrypt.hash(newPassword, 10);
+          connection.query('UPDATE user_account SET password = ? WHERE id = ?', [hashed, userId], (updErr) => {
+            if (updErr) {
+              connection.release();
+              console.error('Error al actualizar la contraseña:', updErr);
+              return res.status(500).json({ error: 'Error al actualizar la contraseña.' });
+            }
+
+            connection.query('DELETE FROM password_reset_codes WHERE user_id = ?', [userId], (delErr) => {
+              if (delErr) {
+                connection.release();
+                console.error('Error al eliminar el código de restablecimiento:', delErr);
+                return res.status(500).json({ error: 'Error interno' });
+              }
+
+              connection.query('SELECT id, email, username, first_name, surname, profile_picture, is_professional, language FROM user_account WHERE id = ?', [userId], (selErr, results) => {
+                connection.release();
+                if (selErr || results.length === 0) {
+                  return res.status(500).json({ error: 'Error al obtener el usuario.' });
+                }
+
+                const user = results[0];
+                const loginToken = jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: '1h' });
+                res.json({ message: 'Password reset successfully', user, token: loginToken });
+              });
+            });
+          });
+        } catch (hashErr) {
+          connection.release();
+          console.error('Error al hashear la nueva contraseña:', hashErr);
+          res.status(500).json({ error: 'Error al procesar la solicitud.' });
+        }
+      });
+    });
+  });
+});
+
+
+
 
 // Proteger las rutas siguientes con JWT
 app.use(authenticateToken);

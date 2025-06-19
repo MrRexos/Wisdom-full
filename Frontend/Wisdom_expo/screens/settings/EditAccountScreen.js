@@ -128,11 +128,13 @@ export default function EditAccountScreen() {
           text: t('delete'),
           onPress: async () => {
             try {
-              const response = await api.put(`/api/user/${user.id}`, {
+              const response = await api.delete(`/api/user/${user.id}`, {
                 email: email,
               });
-        
+              
+              navigation.navigate('GetStarted');
               return response.data;
+              
               
             } catch (error) {
                 if (error.response) {
@@ -167,20 +169,25 @@ export default function EditAccountScreen() {
                     <ChevronLeftIcon size={24} strokeWidth={1.7} color={iconColor}/>  
                 </TouchableOpacity>                             
             </View>
-            <View className="flex-1 justify-center items-center ">
+            <View className="flex-1 justify-center items-center  ">
                 <Text className="font-inter-semibold text-center text-[16px] text-[#444343] dark:text-[#f2f2f2]">{t('account')}</Text>
             </View>
             
             <View className="flex-1 justify-center items-end">
-                {hasChanges && ( // Solo mostrar si hay cambios
-                <TouchableOpacity 
-                    disabled={!email}
-                    onPress={DonePressed} 
-                    className="mr-2 justify-center items-center rounded-full px-3 py-2 bg-[#E0E0E0] dark:bg-[#3D3D3D]"
-                    style={{ opacity: email ? 1 : 0.5 }}>
-                    <Text className="font-inter-medium text-[13px] text-[#444343] dark:text-[#f2f2f2]">Done</Text>
-                </TouchableOpacity>
-                )}
+              <TouchableOpacity
+                disabled={!hasChanges || !email}
+                pointerEvents={hasChanges && email ? 'auto' : 'none'}
+                onPress={DonePressed}
+                className={`
+                  mr-2 justify-center items-center rounded-full px-3 py-2
+                  bg-[#E0E0E0] dark:bg-[#3D3D3D]
+                  ${hasChanges && email ? '' : 'opacity-0'}
+                `}
+              >
+                <Text className="font-inter-medium text-[13px] text-[#444343] dark:text-[#f2f2f2]">
+                  Done
+                </Text>
+              </TouchableOpacity>
             </View>
 
         </View>
@@ -205,6 +212,10 @@ export default function EditAccountScreen() {
                 <Text className="text-[#ff633e] text-[13px] pt-3">{errorMessage}</Text>
             ) : null}
         </View>
+        <TouchableOpacity onPress={() => navigation.navigate('ChangePassword')}>
+            <Text className="font-inter-medium text-[15px] pt-7 text-[#706F6E] dark:text-[#706F6E]">{t('change_password_arrow')}</Text>
+        </TouchableOpacity>
+
           
         
         
